@@ -65,11 +65,14 @@ class DDPG(object):
             target=self._target_q_net,
             tau=self._target_update_tau
         )
-        torch.save(self._q_net,"/home/oli/realAntDDPG/SavedModels/q_n/q.pt")
-        # torch.save(self._target_q_net,"/home/oli/realAntDDPG/SavedModels/target_q")
-        torch.save(self._policy_net,"/home/oli/realAntDDPG/SavedModels/policy_n/policy.pt")
-        # torch.save(self._target_policy_net,"/home/oli/realAntDDPG/SavedModels/target_policy")
-
+        PATH_Q="/home/oli/realAntDDPG/SavedModels/q_n/q.pt"
+        PATH_P="/home/oli/realAntDDPG/SavedModels/policy_n/policy.pt"
+        PATH_TAR_Q="/home/oli/realAntDDPG/SavedModels/target_q/tar_q.pt"
+        PATH_TAR_P="/home/oli/realAntDDPG/SavedModels/target_policy/tar_p.pt"
+        torch.save(self._q_net,PATH_Q)
+        torch.save(self._target_q_net,PATH_TAR_Q)
+        torch.save(self._policy_net,PATH_P)
+        torch.save(self._target_policy_net,PATH_TAR_P)
 
 
 def get_optimizer(policy, value):

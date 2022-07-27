@@ -83,7 +83,7 @@ class Trainer(object):
 
         tty.setcbreak(sys.stdin)
         # Number of steps per episode - 300 is okay, but you might want to increase it
-        nmbr_steps = 30
+        nmbr_steps = 50
 
         current_state = self._env.reset()
 
@@ -136,8 +136,8 @@ class Trainer(object):
                 #         cum_reward+=0
                 #         pass
 
-                limit_rewards=-20
-                if cum_reward<-1 and self.terminate_step==True:
+                limit_rewards=-5
+                if cum_reward<limit_rewards and self.terminate_step==True:
                      print("Cum_rewards less than ",limit_rewards," To Terminate Step: Press T, To continue: press ANY KEY")
                      y=sys.stdin.read(1)[0]
                      
@@ -175,30 +175,3 @@ class Trainer(object):
             # You could instead use visualizatin boards etc.
             print(self._rewards)               
             
-
-    def single_train_step(self):
-        """
-        This function collects first training data, then performs several
-        training iterations and finally evaluates the current policy.
-        """
-        #training_iters = 1000
-        training_iters =60
-        # Collect training data with noise
-        self.collect_training_data(noise=True)
-        for _ in range(training_iters):
-            self.agent.train(self._replay)
-        # Collect data without noise
-        self.collect_training_data(noise=False)
-        # Save the cum. rewards achieved into a csv file
-        self.save_logged_data(rewards_training=self._rewards, rewards_test=self._rewards_test)
-        
-
-    def save_logged_data(self, rewards_training, rewards_test):
-        """ Saves logged rewards to a csv file.
-        """
-        with open(
-            os.path.join(self._file_path,
-                'rewards.csv'), 'w') as fd:
-                cwriter = csv.writer(fd)
-                cwriter.writerow(rewards_training)
-                cwriter.writerow(rewards_test)

@@ -126,7 +126,6 @@ class Marker():
         self.startpoints.clear()
         self.endpoints.clear()
 
-
     def printPoints(self):
         print("Start point: ",self.startpoints," End points: ",self.endpoints)
 

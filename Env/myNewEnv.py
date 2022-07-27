@@ -105,6 +105,12 @@ class EnvironmentHandler():
         else:
             self.zero_j_cnt = 0
 
+         # calculate speed (this must be based on camera_dt) 
+        # don't reorder (external webcam)
+        x_vel = last_camera_meas["xvel"]
+        y_vel = last_camera_meas["yvel"]
+        z_vel = last_camera_meas["zvel"]
+
         # Ote Robotics RealAnt action spaceroll
         # 0 - hip right front  
         # 1 - ankle right front
@@ -137,8 +143,23 @@ class EnvironmentHandler():
         jpos_vel = (last_frame_jpos - jpos)/joint_dt if last_frame_jpos is not None else np.zeros((8,))
         torso_pos=np.array([last_camera_meas["x"]-last_frame_camera_meas["x"] if last_frame_camera_meas !=None else 0,last_camera_meas["y"]-last_frame_camera_meas["y"]if last_frame_camera_meas !=None else 0])
         #print("torso pos: ", torso_pos)
+        torso_pos_and_angle = np.array([x_vel, y_vel, z_vel, last_camera_meas["z"], 
+    
+            (last_frame_camera_meas["roll"] - last_camera_meas["roll"])/camera_dt if last_frame_camera_meas != None else 0,
+            (last_frame_camera_meas["pitch"] - last_camera_meas["pitch"])/camera_dt if last_frame_camera_meas != None else 0,
+            (last_frame_camera_meas["yaw"] - last_camera_meas["yaw"])/camera_dt if last_frame_camera_meas != None else 0,
 
-        state = np.concatenate([torso_pos,jpos, jpos_vel])
+            np.sin(last_camera_meas["roll"] / 180. * np.pi), 
+            np.sin(last_camera_meas["pitch"] / 180. * np.pi), 
+            np.sin(last_camera_meas["yaw"] / 180. * np.pi), 
+            np.cos(last_camera_meas["roll"] / 180. * np.pi), 
+            np.cos(last_camera_meas["pitch"] / 180. * np.pi), 
+            np.cos(last_camera_meas["yaw"] / 180. * np.pi), 
+
+        ])
+        
+        state = np.concatenate([torso_pos_and_angle, jpos, jpos_vel])
+        #state = np.concatenate([torso_pos,jpos, jpos_vel])
 
         # past_obses.append(state)
         # state = np.concatenate(past_obses)
@@ -147,7 +168,7 @@ class EnvironmentHandler():
         last_frame_camera_meas = last_camera_meas
         last_frame_jpos = jpos
 
-        info = np.array([last_camera_meas["x"], last_camera_meas["y"]])
+        info = np.array([last_camera_meas["xvel"], last_camera_meas["yvel"]])
         #return obs, info
 
         self.rewards=state[0]
@@ -277,7 +298,7 @@ class AntEnv():
         #y_disp=abs(round((y1-self._old_y),4))
         y_disp=abs(start_y-y1)
         y_reward=round((1/(1+y_disp)),4)
-        reward = (x_disp*0.1)
+        reward = (x_disp*0.1)+y_reward*0.1
         #reward = ((x1-self._old_x )*0.1)
         #reward=1/(2+y1-self._old_y)
         #print("state (x,y):",state[0],",",state[1],"reward: ",reward)
@@ -317,21 +338,3 @@ class AntEnv():
 #     action = np.random.uniform(-1, 1, ACT_SIZE)
 #     print("action: ",action)
 #     ant.step(action) 
-        
-
-
-
-
-
-
-
-
-
-    
-
-
-
-        
-            
-
-        
