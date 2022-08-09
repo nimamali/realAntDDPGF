@@ -74,6 +74,7 @@ class EnvironmentHandler():
         global last_ant_meas, last_camera_meas, last_frame_ant_meas, last_frame_camera_meas, last_frame_jpos, past_obses
         self.parent_conn.send([])
         last_ant_meas, last_camera_meas = self.parent_conn.recv()
+        self.terminate=False
 
         while last_ant_meas == None and last_camera_meas == None:
             time.sleep(0.01)
@@ -99,8 +100,15 @@ class EnvironmentHandler():
         if joint_dt == 0:
             self.zero_j_cnt += 1
             if self.zero_j_cnt > 3:
-                print("observations stuck, quitting (serial)")
-                quit()
+                time.sleep(15)
+                print("waiting for observations, serial issue")
+                if self.zero_j_cnt > 3:
+                    print("observations stuck, quitting (serial)")
+                    self.reset_servos()
+                    self.reset_stand()
+                    self.terminate=True
+                    info=np.array([0,0,self.terminate])#3rd value of info depicts terminate state
+                    return 0,0,0,info          
             joint_dt = default_dt 
         else:
             self.zero_j_cnt = 0
@@ -147,7 +155,7 @@ class EnvironmentHandler():
         last_frame_camera_meas = last_camera_meas
         last_frame_jpos = jpos
 
-        info = np.array([last_camera_meas["x"], last_camera_meas["y"]])
+        info = np.array([last_camera_meas["x"], last_camera_meas["y"],self.terminate])
         #return obs, info
 
         self.rewards=state[0]
@@ -163,7 +171,7 @@ class EnvironmentHandler():
         a = (np.clip(np.array(a),-1,1) + 1) / 2.0  # scale to 0...1
 
         hip_range = 256 
-        hip_offset = 368 # this limits hip from middle to +-45deg
+        hip_offset = 368 #368 this limits hip from middle to +-45deg
         ankle_range = 224
         ankle_offset = 288
 
@@ -225,7 +233,6 @@ class AntEnv():
         self.env.reset_servos()
         time.sleep(0.5)
         self.env.detach_servos()
-        #env.command()
         time.sleep(1)
 
         print("Running")
@@ -259,14 +266,113 @@ class AntEnv():
     def apply_controls(self,pid_setpoints):
         """apply controls to the robot"""
         self.attach_servos()
-        time.sleep(0.2)
-        self.reset()
-        time.sleep(0.2)
+        time.sleep(0.1)
+        #self.reset()
+        #time.sleep(0.2)
         self.env.apply_controls(pid_setpoints)
 
     def step(self,a):      
         action_repeat = 1
         self.apply_controls(a)
+        last_time = datetime.datetime.utcnow()
+        time.sleep(0.17) # SOmething to tune
+        state, reward, done, info = self.env.step()
+        x1 = info[0]
+        y1=info[1]
+        start_y=174
+        x_disp=round((x1 -self._old_x),4)
+        #y_disp=abs(round((y1-self._old_y),4))
+        y_disp=abs(start_y-y1)
+        y_reward=round((1/(1+y_disp)),4)
+        reward = (x_disp)*0.1
+        #reward = ((x1-self._old_x )*0.1)
+        #reward=1/(2+y1-self._old_y)
+        #print("state (x,y):",state[0],",",state[1],"reward: ",reward)
+        print("x_r:",x_disp*0.1,"reward: ",reward)
+        self._old_x = x1
+        # # x1=last_camera_meas["x"]
+        # for _ in range(action_repeat):
+        #     state, reward, done, info = self.env.step()
+        #     time.sleep(0.05)
+        #     if _==0:
+        #         x1=info[0]
+        #         print("x1: ",x1)
+        #     if _==2:
+        #         x2=info[0]
+        #         print("x2: ",x2)
+        # # x2=last_camera_meas["x"]
+        # now = datetime.datetime.utcnow()
+        # interval = (now - last_time).total_seconds()
+        # print("interval: ",interval)
+        # last_time = now
+        # distance=x2-x1
+        # speed=distance/interval
+        #speed = self.robot.robot_body.speed()
+        #vx = speed[0]
+        #reward = vx 
+        return state, reward, done, info
+    def command(self):
+        self.attach_servos()
+        time.sleep(0.2)
+        self.reset()
+        time.sleep(0.2)
+        self.env.command()
+
+
+class AntVelEnv():
+    def __init__(self):
+        
+        self.env=EnvironmentHandler()
+        time.sleep(0.5)
+        self.env.reset_servos()
+        time.sleep(0.5)
+        self.env.detach_servos()
+        #env.command(),"y_r: ",y_reward,
+        time.sleep(1)
+        self._last_position_orig = np.array([(210 - 368)/256, (512 - 288)/224 ]*4)
+
+        print("Running")
+
+    def reset(self):
+        """ reset robot joints and everything before rollout """
+        self._last_position = self._last_position_orig.copy()
+        self.env.reset_tracking()
+        self.env.reset_servos()
+        time.sleep(0.1)
+        self.env.reset_stand()
+        time.sleep(0.2)
+        r=np.zeros((1,18))
+        #r[2]=r[4]=r[6]=r[8]=300
+        state, reward, done, info = self.env.step()
+        self._old_x = info[0]
+        self._old_y=info[1]
+        return state
+
+    def detach_servos(self):
+        """ cut torque to servos to save power """
+        self.env.detach_servos()
+
+    def attach_servos(self):
+        """ enable torque to servos to start actuation """
+        self.env.attach_servos()
+
+    # def get_state(self):
+    #     """ get current state of joints and camera x,y data """
+    #     return self.env.get_obs()
+
+    def apply_controls(self,pid_setpoints):
+        """apply controls to the robot"""
+        self.attach_servos()
+        time.sleep(0.2)
+        #self.reset()
+        #time.sleep(0.2)
+        self.env.apply_controls(pid_setpoints)
+
+    def step(self,a): 
+        self._last_position = np.clip(self._last_position + a * 0.5, -1.0,1.0)  
+        print(self._last_position) 
+        action_repeat = 1
+        self.apply_controls(self._last_position.copy())
         last_time = datetime.datetime.utcnow()
         time.sleep(0.1) # SOmething to tune
         state, reward, done, info = self.env.step()
@@ -281,7 +387,7 @@ class AntEnv():
         #reward = ((x1-self._old_x )*0.1)
         #reward=1/(2+y1-self._old_y)
         #print("state (x,y):",state[0],",",state[1],"reward: ",reward)
-        print("x_r:",x_disp*0.1,"y_r: ",y_reward,"reward: ",reward)
+        print("x_r:",x_disp*0.1,"reward: ",reward)
         self._old_x = x1
         # # x1=last_camera_meas["x"]
         # for _ in range(action_repeat):

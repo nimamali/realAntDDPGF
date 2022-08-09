@@ -15,9 +15,7 @@ import termios
 
 from Env.myEnv import AntEnv as Env
 
-FRAME_STACKING = 4
 ACT_SIZE = 8
-#OBS_SIZE = 18*FRAME_STACKING
 OBS_SIZE = 18
 ctx1 = zmq.Context()
 socket = ctx1.socket(zmq.REP)
@@ -83,7 +81,7 @@ class Trainer(object):
 
         tty.setcbreak(sys.stdin)
         # Number of steps per episode - 300 is okay, but you might want to increase it
-        nmbr_steps = 30
+        nmbr_steps = 93
 
         current_state = self._env.reset()
 
@@ -112,30 +110,36 @@ class Trainer(object):
                 # Make a step in the environment with the action and receive the next state, a reward and terminal
                 #state, reward, terminal, info = self._env.step(action)
                 state, reward, terminal, info = self._env.step(action)
+                if info[2]==True:
+                    self.terminated=True
+                    break
 
                 # If we want to slow down the simulator
                 if self._slow_simulation:
                     time.sleep(0.1)
                 cum_reward += reward
-                # if -30<reward<30:
-                #     # Just for logging
-                #     cum_reward += reward
-                # else:
-                    
-                #     print("WARNING: reward is unrealistic - Press T to terminate step, or ANY KEY to not give any reward")
-                    
-                #     z=sys.stdin.read(1)[0]
-                #     if z=="t":
-                #         self.terminated=True                      
-                #         state = self._env.reset()
-                #         print("EPISODE TERMINATED--")
-                #         break
-                #     else:
-                #         self.terminate_step=False
-                #         self.terminated=False
-                #         cum_reward+=0
-                #         pass
 
+                #enable user to ignore unrealistic rewards which occur at the limits of camera foeld of view
+                if -30<reward<30:
+                    # Just for logging
+                    cum_reward += reward
+                else:
+                    
+                    print("WARNING: reward is unrealistic - Press T to terminate step, or ANY KEY to not give any reward")
+                    
+                    z=sys.stdin.read(1)[0]
+                    if z=="t":
+                        self.terminated=True                      
+                        state = self._env.reset()
+                        print("EPISODE TERMINATED--")
+                        break
+                    else:
+                        self.terminate_step=False
+                        self.terminated=False
+                        cum_reward+=0
+                        pass
+                
+                #enable user to terminate the episode for training if any practical mistakes occurs
                 limit_rewards=-20
                 if cum_reward<-1 and self.terminate_step==True:
                      print("Cum_rewards less than ",limit_rewards," To Terminate Step: Press T, To continue: press ANY KEY")
@@ -146,6 +150,7 @@ class Trainer(object):
                         state = self._env.reset()
                         print("EPISODE TERMINATED--")
                         break
+                    
                      else:
                         self.terminate_step=False
                         self.terminated=False
@@ -162,6 +167,7 @@ class Trainer(object):
 
                 # The next current state
                 current_state = state
+                
             # Did we collect training data with noise (training) us using the policy only (test)
             if noise:
                 if self.terminated==True:
@@ -182,13 +188,23 @@ class Trainer(object):
         training iterations and finally evaluates the current policy.
         """
         #training_iters = 1000
-        training_iters =60
+        training_iters =1000
         # Collect training data with noise
         self.collect_training_data(noise=True)
-        for _ in range(training_iters):
-            self.agent.train(self._replay)
-        # Collect data without noise
-        self.collect_training_data(noise=False)
+        orig_settings = termios.tcgetattr(sys.stdin)
+
+        tty.setcbreak(sys.stdin)
+        print("Want to train? Press y or n")
+        x=sys.stdin.read(1)[0]
+        if x=='y':
+            for _ in range(training_iters):
+                self.agent.train(self._replay)
+                print("------Training -----")
+            # Collect data without noise
+            print("Policy Testing")
+            self.collect_training_data(noise=False)
+        else:
+            return 0
         # Save the cum. rewards achieved into a csv file
         self.save_logged_data(rewards_training=self._rewards, rewards_test=self._rewards_test)
         

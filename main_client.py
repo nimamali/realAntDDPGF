@@ -26,12 +26,12 @@ def main():
     #     print("Data Collection ON")
     #     trainer.collect_training_data(True, std = 0.5)
     # for _ in range(1000):
-    #     print("Training--------step", _)
+    #     print("Training--------step", 1_)
     #     trainer.single_train_step()
     for _ in range(5):
         print("Data Collection ON")
         trainer.collect_training_data(True, std = 0.5)
-    for _ in range(16):
+    for _ in range(50):
         print("Training--------step", _)
         trainer.single_train_step()
         steps=_
